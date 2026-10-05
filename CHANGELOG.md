@@ -7,23 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0]
+
 ### Changed
 
-- **Cached `to_mr0()`.** The MR-zero sequence of the last call with the same
-  block layout is reused. Blocks whose non-tensor content changed are
-  converted again, and every block holding a tensor is written again so that
-  gradients reach it: flip angle, phase and frequency offsets only update the
-  pulse rotation or ADC phase, timing and gradient tensors convert their
-  block. The cached conversion lives in `seq_convert_cached`, next to
+- **Cached `to_mr0()`.** Previous MR-zero sequences are reused. Blocks whose
+  non-tensor content changed or have torch tensors are converted again. flip angle, phase and frequency offsets only update the corresponding properties to avoid re-
+  computations while correctly passing autograd gradients.
+  The cached conversion lives in `seq_convert_cached`, next to
   `seq_convert`: `to_mr0(cached=False)` converts from scratch with
   `seq_convert.convert`, `seq_convert_cached.clear_cache()` frees the cached
   sequences.
-- **Faster `seq_convert`.** Pulse shapes and their integrals are cached
-  instead of rebuilding the pypulseq pulse for every sub-pulse, and gradient
-  moments are integrated for all time points of a block at once. Both
-  conversions share this code. On the 16-echo TSE, a full conversion went
-  from about 130 ms to about 50 ms, a cached one takes about 7 ms
-  ([demo/benchmark_to_mr0.py](demo/benchmark_to_mr0.py)).
+- **Faster `seq_convert`.** Pulse shapes and their integrals are cached, gradient
+  moments are integrated for all time points of a block at once. The conversion is now
+  roughly 2.5x faster, cached conversion up to 20x - see ([demo/benchmark_to_mr0.py](demo/benchmark_to_mr0.py)).
 - **RF shapes.** `RfPulse.waveform` stores the parameters of its waveform as a
   `BlockShape`, `GaussShape`, `SincShape` or `ArbitraryShape` instead of a
   pypulseq factory function, and `freq_ppm` / `phase_ppm` as fields.
