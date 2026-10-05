@@ -1,7 +1,13 @@
+from functools import lru_cache
+
+import numpy as np
 import torch
 import MRzeroCore as mr0
+from pypulseq import Opts
+
 from . import calc_duration
 from .events import Adc, Delay, SoftDelay, RfPulse, TrapGrad, ExtTrapGrad, ArbitraryGrad
+from .rf_shapes import RfShape
 
 
 def convert_tensors_to_float32(obj):
@@ -75,7 +81,7 @@ def convert(
     seq = mr0.Sequence()
     for rep_in in reps:
         event_count = 0
-        for ev in rep_in:
+        for ev in rep_in[1:]:  # the pulse is not an event
             if isinstance(ev, TmpAdc):
                 event_count += len(ev.event_time)
             else:
@@ -209,14 +215,6 @@ def parse_pulse(
     else:
         use = mr0.PulseUsage.UNDEF
 
-    def calc_spoiler(t1, t2) -> TmpSpoiler:
-        return TmpSpoiler(
-            t2 - t1,
-            integrate(grad_x, t2) - integrate(grad_x, t1) if grad_x else 0.0,
-            integrate(grad_y, t2) - integrate(grad_y, t1) if grad_y else 0.0,
-            integrate(grad_z, t2) - integrate(grad_z, t1) if grad_z else 0.0,
-        )
-
     # time points edges of the pulse buckets which are integrated over
     duration = calc_duration(delay, rf, grad_x, grad_y, grad_z)
     step = rf.shape_dur / samples
@@ -235,14 +233,22 @@ def parse_pulse(
         for i in range(samples)
     ]
     # grads are integrated from one pulse center to the next
-    t_grad = [0] + pulse_times + [duration]
-    
+    t_grad = torch.stack(
+        [torch.as_tensor(t, dtype=torch.float64) for t in [0, *pulse_times, duration]]
+    )
+    gradm = torch.stack([
+        integrate(grad, t_grad) if grad else torch.zeros_like(t_grad)
+        for grad in (grad_x, grad_y, grad_z)
+    ], dim=1)
+    gradm = torch.diff(gradm, dim=0)
+    event_time = torch.diff(t_grad)
+
     # Alternate spoiler from one pulse center to next with pulse itself
     events: list[TmpPulse | TmpSpoiler] = []
 
     phase_increment = torch.tensor(0.0)
     for i in range(samples):
-        events.append(calc_spoiler(t_grad[i], t_grad[i + 1]))
+        events.append(TmpSpoiler(event_time[i], *gradm[i]))
         flip, phase = integrate_pulse(rf, t_rf[i], t_rf[i + 1])
 
         # phase profile due to off-resonance
@@ -306,7 +312,7 @@ def parse_pulse(
                 use,
             )
         )
-    events.append(calc_spoiler(t_grad[-2], t_grad[-1]))
+    events.append(TmpSpoiler(event_time[-1], *gradm[-1]))
 
     return events
 
@@ -332,11 +338,11 @@ def parse_adc(delay, adc: Adc, grad_x, grad_y, grad_z) -> tuple[TmpAdc, TmpSpoil
 
     gradm = torch.zeros((adc.num_samples + 2, 3))
     if grad_x:
-        gradm[:, 0] = torch.vmap(lambda t: integrate(grad_x, t))(time)
+        gradm[:, 0] = integrate(grad_x, time)
     if grad_y:
-        gradm[:, 1] = torch.vmap(lambda t: integrate(grad_y, t))(time)
+        gradm[:, 1] = integrate(grad_y, time)
     if grad_z:
-        gradm[:, 2] = torch.vmap(lambda t: integrate(grad_z, t))(time)
+        gradm[:, 2] = integrate(grad_z, time)
 
     event_time = torch.diff(time)
     gradm = torch.diff(gradm, dim=0)
@@ -360,6 +366,7 @@ def split_gradm(grad, t):
 
 
 def integrate(grad, t):
+    """Gradient moment from the start of the block up to t (scalar or 1D tensor)."""
     if isinstance(grad, TrapGrad):
         # The Heaviside terms only select which piece of the piecewise integral
         # is active; they are not part of the integrand. torch.heaviside has no
@@ -422,6 +429,8 @@ def integrate(grad, t):
         c1 = waveform[:-1]
         c2 = waveform[1:]
 
+        # One row of segments per time point
+        t = torch.as_tensor(t)[..., None]
         # This is how much of every segment contributes, clamped to [0, width]
         t_rel = torch.clamp(t - t1, 0 * t1, t2 - t1)
         # The amplitude of the segment at t, will be clamped to the amplitude
@@ -431,25 +440,54 @@ def integrate(grad, t):
         # For integration, we calculate the area of the rectangle with the
         # average height of the left and right side of the actual shape
         c_avg = 0.5 * (c1 + c_end)
-        return (t_rel * c_avg).sum()
+        return (t_rel * c_avg).sum(-1)
     else:
         raise NotImplementedError
 
 
 def integrate_pulse(rf: RfPulse, t_start, t_end):
-    import numpy as np
+    # The fraction of the pulse area inside [t_start, t_end] only depends on
+    # the (detached) shape and timing. Multiplying by the live rf.flip_angle
+    # tensor keeps the gradient of the user's flip-angle parameter.
+    fraction = pulse_fraction(
+        rf.waveform, float(rf.shape_dur), float(rf.delay), float(t_start), float(t_end)
+    )
+    flip = torch.as_tensor(rf.flip_angle) * fraction
+    phase = (
+        rf.phase_offset + 0.0
+    )  # not returned by the _generate_shape() function - extend!
 
-    # HACK: horrible hack to get integration going, maybe pulses *should* store their shape?
-    from pypulseq import Opts
+    return flip, phase
 
-    pp_rf = rf.to_pulseq(Opts.default)
-    t_rel = pp_rf.t
-    amp_shape = pp_rf.signal
-    # t_rel, amp_shape = rf.shape
-    time_shape = np.asarray(t_rel) + float(rf.delay)
-    amp_shape = np.asarray(amp_shape)
-    t_start = float(t_start)
-    t_end = float(t_end)
+
+@lru_cache(maxsize=256)
+def pulse_shape(shape: RfShape, shape_dur: float) -> tuple[np.ndarray, np.ndarray]:
+    """Time points (from the shape start) and amplitudes of the pulse waveform."""
+    unit_pulse = RfPulse(
+        flip_angle=1.0,
+        freq_offset=0.0,
+        phase_offset=0.0,
+        delay=0.0,
+        shape_dur=shape_dur,
+        center=0.0,
+        ringdown_time=0.0,
+        use="undefined",
+        shim_array=None,
+        freq_ppm=0.0,
+        phase_ppm=0.0,
+        waveform=shape,
+    )
+    pp_rf = unit_pulse.to_pulseq(Opts.default)
+    return np.asarray(pp_rf.t), np.asarray(pp_rf.signal)
+
+
+@lru_cache(maxsize=4096)
+def pulse_fraction(
+    shape: RfShape, shape_dur: float, delay: float, t_start: float, t_end: float
+) -> float:
+    """Fraction of the pulse area between t_start and t_end (block time)."""
+    t_rel, amp_shape = pulse_shape(shape, shape_dur)
+    time_shape = t_rel + delay
 
     # Clamp the window to the support of the RF shape. Outside of it the RF is
     # zero, but a trapezoidal segment joining a zero pad point to a non-zero
@@ -458,7 +496,7 @@ def integrate_pulse(rf: RfPulse, t_start, t_end):
     lo = max(t_start, float(time_shape[0]))
     hi = min(t_end, float(time_shape[-1]))
     if hi <= lo:
-        return torch.as_tensor(rf.flip_angle) * 0.0, rf.phase_offset + 0.0
+        return 0.0
     # Find where lo and hi are placed in time_shape
     i_start = np.searchsorted(time_shape, lo, side="left")
     i_end = np.searchsorted(time_shape, hi, side="right")
@@ -469,19 +507,6 @@ def integrate_pulse(rf: RfPulse, t_start, t_end):
     time = [lo] + time_shape[i_start:i_end].tolist() + [hi]
     amp = [v_start] + amp_shape[i_start:i_end].tolist() + [v_end]
 
-    # amp_shape is already scaled by the (detached) flip_angle, so its full
-    # integral equals flip_angle_detached / (2π). The window-to-full area
-    # ratio is therefore grad-free and just encodes "what fraction of the
-    # pulse is inside [t_start, t_end]". Multiplying by the live rf.flip_angle
-    # tensor reconnects autograd so gradients flow back into the user's
-    # flip-angle parameter.
     window_area = np.trapezoid(amp, time)
     full_area = np.trapezoid(amp_shape, time_shape)
-    fraction = float(window_area / full_area) if full_area != 0 else 0.0
-
-    flip = torch.as_tensor(rf.flip_angle) * fraction
-    phase = (
-        rf.phase_offset + 0.0
-    )  # not returned by the _generate_shape() function - extend!
-
-    return flip, phase
+    return float(window_area / full_area) if full_area != 0 else 0.0

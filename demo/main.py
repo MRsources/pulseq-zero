@@ -4,6 +4,10 @@ Builds a 2D TSE sequence (see ``write_tse.py``), simulates a target image
 with a fully-180° refocusing train, then optimizes a per-echo flip-angle
 vector so the reconstruction stays close to the target (RMS loss on the
 magnitude image) while the SAR proxy ``sum(flips**2)`` goes down.
+
+The sequence is rebuilt from the current flip angles in every iteration.
+``check_timing()`` translates the whole sequence through PyPulseq, so it runs
+once before the loop instead of in every rebuild.
 """
 
 import os
@@ -29,7 +33,7 @@ PHANTOM_PATH = os.path.join(os.path.dirname(__file__), 'brain.npz')
 
 
 def simulate(flips, data):
-    seq = build_tse(refoc_flips=flips).to_mr0()
+    seq = build_tse(refoc_flips=flips, check_timing=False).to_mr0()
 
     graph = mr0.compute_graph(seq, data)
     signal = mr0.execute_graph(graph, seq, data, print_progress=False)
@@ -40,6 +44,7 @@ def simulate(flips, data):
 
 def main():
     data = mr0.VoxelGridPhantom.load(PHANTOM_PATH).slices([36]).build()
+    build_tse(check_timing=True)  # same timing for every flip angle train
 
     # Target image: the full-180° refocusing train.
     with torch.no_grad():
@@ -61,6 +66,7 @@ def main():
 
     t0 = time()
     for i in range(N_ITER):
+        t_iter = time()
         optimizer.zero_grad()
         reco = simulate(flips, data)
 
@@ -77,7 +83,8 @@ def main():
         flip_hist.append(flips.detach().clone().numpy())
         print(
             f'{i + 1}/{N_ITER}: data={data_loss.item():.4f}, '
-            f'SAR={sar_loss.item():.2f}, total={loss.item():.4f}'
+            f'SAR={sar_loss.item():.2f}, total={loss.item():.4f}, '
+            f'{time() - t_iter:.2f} s'
         )
     print(f'Optimization took {time() - t0:.1f} s')
 

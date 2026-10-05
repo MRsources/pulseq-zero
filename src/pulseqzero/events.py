@@ -17,7 +17,6 @@ from __future__ import annotations
 from types import SimpleNamespace
 from dataclasses import dataclass
 from typing import Optional
-from collections.abc import Callable
 import inspect as _inspect
 import numpy as np
 import torch
@@ -25,6 +24,7 @@ import pypulseq as pp
 from pypulseq import Opts
 from pypulseq.make_arbitrary_grad import make_arbitrary_grad as _pp_make_arbitrary_grad
 from .wrapper import _n, _r
+from .rf_shapes import RfShape
 
 # pypulseq 1.5+ added first/last/oversampling to make_arbitrary_grad
 _PP_ARB_GRAD_HAS_EXTRAS = "first" in _inspect.signature(_pp_make_arbitrary_grad).parameters
@@ -60,9 +60,9 @@ class RfPulse:
     ringdown_time: float  # set via system param, do not modify afterwards
     use: str
     shim_array: Optional[Array]  # Martins pTx extension
-
-    # Reconstruct pypulseq object from self - additional params stored in lambda.
-    _pp_factory: Callable[[RfPulse, Opts], SimpleNamespace]
+    freq_ppm: Scalar
+    phase_ppm: Scalar
+    waveform: RfShape  # parameters the waveform is generated from
 
     @property
     def duration(self) -> Scalar:
@@ -70,7 +70,7 @@ class RfPulse:
 
     def to_pulseq(self, system: Opts) -> SimpleNamespace:
         # Pulses never generate gz / gzr: already split TrapGrad blocks
-        return self._pp_factory(self, system)
+        return self.waveform.to_pulseq(self, system)
 
 
 # constructed in make_trapezoid

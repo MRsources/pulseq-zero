@@ -11,6 +11,7 @@ import pypulseq as pp
 
 def main(
     refoc_flips=None,
+    check_timing: bool = True,
     plot: bool = False,
     write_seq: bool = False,
     seq_filename: str = 'tse_pypulseq.seq',
@@ -293,15 +294,16 @@ def main(
             seq.add_block(gs5)
             seq.add_block(delay_TR)
 
-    (
-        ok,
-        error_report,
-    ) = seq.check_timing()  # Check whether the timing of the sequence is correct
-    if ok:
-        print('Timing check passed successfully')
-    else:
-        print('Timing check failed. Error listing follows:')
-        [print(e) for e in error_report]
+    if check_timing:
+        (
+            ok,
+            error_report,
+        ) = seq.check_timing()  # Check whether the timing of the sequence is correct
+        if ok:
+            print('Timing check passed successfully')
+        else:
+            print('Timing check failed. Error listing follows:')
+            [print(e) for e in error_report]
 
     # ======
     # VISUALIZATION

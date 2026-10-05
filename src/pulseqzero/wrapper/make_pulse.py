@@ -1,22 +1,14 @@
-from types import SimpleNamespace
 from typing import Optional, cast
-import inspect as _inspect
-import pypulseq as pp
 from warnings import warn
 from copy import copy
 import numpy as np
 import torch
 
-from .. import get_supported_rf_uses, Opts, FREUDENSPRUNG_PTX
+from .. import get_supported_rf_uses, Opts
 from ..events import RfPulse, TrapGrad, Scalar, Array
+from ..rf_shapes import ArbitraryShape, BlockShape, GaussShape, SincShape
 from .make_grad import make_trapezoid
-from . import _n, _r
-
-# pypulseq 1.5+ added freq_ppm / phase_ppm to all pulse factories
-_PP_HAS_PPM = "freq_ppm" in _inspect.signature(pp.make_block_pulse).parameters
-# pypulseq 1.5+ added center and no_signal_scaling to make_arbitrary_rf
-_PP_ARB_HAS_CENTER = "center" in _inspect.signature(pp.make_arbitrary_rf).parameters
-_PP_ARB_HAS_NO_SIGNAL_SCALING = "no_signal_scaling" in _inspect.signature(pp.make_arbitrary_rf).parameters
+from . import _n
 
 
 def make_block_pulse(
@@ -67,20 +59,9 @@ def make_block_pulse(
         ringdown_time=system.rf_ringdown_time,
         use=use,
         shim_array=shim_array,
-        # wrapped pypulseq call - stored if needed for writing, plotting, ...
-        _pp_factory=lambda self, system: pp.make_block_pulse(
-            flip_angle=_n(self.flip_angle),
-            delay=_r(_n(self.delay), system.rf_raster_time),
-            duration=_r(_n(self.shape_dur), system.rf_raster_time),
-            bandwidth=None,
-            time_bw_product=None,
-            freq_offset=_n(self.freq_offset),
-            phase_offset=_n(self.phase_offset),
-            system=system,
-            use=self.use,
-            **({"freq_ppm": _n(freq_ppm), "phase_ppm": _n(phase_ppm)} if _PP_HAS_PPM else {}),
-            **({"shim_array": self.shim_array} if FREUDENSPRUNG_PTX else {}),
-        ),
+        freq_ppm=freq_ppm,
+        phase_ppm=phase_ppm,
+        waveform=BlockShape(),
     )
 
 
@@ -131,29 +112,14 @@ def make_gauss_pulse(
         ringdown_time=system.rf_ringdown_time,
         use=use,
         shim_array=shim_array,
-        # wrapped pypulseq call - stored if needed for writing, plotting, ...
-        _pp_factory=lambda self, system: cast(
-            SimpleNamespace,
-            pp.make_gauss_pulse(
-                flip_angle=_n(self.flip_angle),
-                apodization=_n(apodization),
-                bandwidth=_n(bandwidth),
-                center_pos=_n(center_pos),
-                delay=_r(_n(self.delay), system.rf_raster_time),
-                dwell=_r(_n(dwell), system.rf_raster_time),
-                duration=_r(_n(self.shape_dur), system.rf_raster_time),
-                freq_offset=_n(self.freq_offset),
-                max_grad=0.0,  # for grads only
-                max_slew=0.0,  # for grads only
-                phase_offset=_n(self.phase_offset),
-                return_gz=False,  # grads are constructed separately
-                slice_thickness=0.0,  # for grads only
-                system=system,
-                time_bw_product=_n(time_bw_product),
-                use=self.use,
-                **({"freq_ppm": _n(freq_ppm), "phase_ppm": _n(phase_ppm)} if _PP_HAS_PPM else {}),
-                **({"shim_array": self.shim_array} if FREUDENSPRUNG_PTX else {}),
-            ),
+        freq_ppm=freq_ppm,
+        phase_ppm=phase_ppm,
+        waveform=GaussShape(
+            apodization=_n(apodization),
+            bandwidth=_n(bandwidth),
+            center_pos=_n(center_pos),
+            dwell=_n(dwell),
+            time_bw_product=_n(time_bw_product),
         ),
     )
 
@@ -238,28 +204,13 @@ def make_sinc_pulse(
         ringdown_time=system.rf_ringdown_time,
         use=use,
         shim_array=shim_array,
-        # wrapped pypulseq call - stored if needed for writing, plotting, ...
-        _pp_factory=lambda self, system: cast(
-            SimpleNamespace,
-            pp.make_sinc_pulse(
-                flip_angle=_n(self.flip_angle),
-                apodization=_n(apodization),
-                delay=_r(_n(self.delay), system.rf_raster_time),
-                duration=_r(_n(self.shape_dur), system.rf_raster_time),
-                dwell=_r(_n(dwell), system.rf_raster_time),
-                center_pos=_n(center_pos),
-                freq_offset=_n(self.freq_offset),
-                max_grad=0.0,  # for grads only
-                max_slew=0.0,  # for grads only
-                phase_offset=_n(self.phase_offset),
-                return_gz=False,  # grads are constructed separately
-                slice_thickness=0.0,  # for grads only
-                system=system,
-                time_bw_product=_n(time_bw_product),
-                use=self.use,
-                **({"freq_ppm": _n(freq_ppm), "phase_ppm": _n(phase_ppm)} if _PP_HAS_PPM else {}),
-                **({"shim_array": self.shim_array} if FREUDENSPRUNG_PTX else {}),
-            ),
+        freq_ppm=freq_ppm,
+        phase_ppm=phase_ppm,
+        waveform=SincShape(
+            apodization=_n(apodization),
+            center_pos=_n(center_pos),
+            dwell=_n(dwell),
+            time_bw_product=_n(time_bw_product),
         ),
     )
 
@@ -360,29 +311,12 @@ def make_arbitrary_rf(
         ringdown_time=system.rf_ringdown_time,
         use=use,
         shim_array=shim_array,
-        # wrapped pypulseq call - stored if needed for writing, plotting, ...
-        _pp_factory=lambda self, system: cast(
-            SimpleNamespace,
-            pp.make_arbitrary_rf(
-                signal=_n(signal),
-                flip_angle=_n(self.flip_angle),
-                bandwidth=0.0,  # for grads only
-                delay=_r(_n(self.delay), system.rf_raster_time),
-                dwell=_r(_n(dwell), system.rf_raster_time),
-                freq_offset=_n(self.freq_offset),
-                **({"no_signal_scaling": True} if _PP_ARB_HAS_NO_SIGNAL_SCALING else {}),
-                max_grad=0.0,  # for grads only
-                max_slew=0.0,  # for grads only
-                phase_offset=_n(self.phase_offset),
-                return_gz=False,  # grads are constructed separately
-                slice_thickness=0.0,  # for grads only
-                system=system,
-                time_bw_product=0.0,  # for grads only
-                use=self.use,
-                **({"freq_ppm": _n(freq_ppm), "phase_ppm": _n(phase_ppm)} if _PP_HAS_PPM else {}),
-                **({"center": _n(center)} if _PP_ARB_HAS_CENTER else {}),
-                **({"shim_array": self.shim_array} if FREUDENSPRUNG_PTX else {}),
-            ),
+        freq_ppm=freq_ppm,
+        phase_ppm=phase_ppm,
+        waveform=ArbitraryShape(
+            signal=tuple(np.atleast_1d(_n(signal)).tolist()),
+            dwell=_n(dwell),
+            center=_n(center),
         ),
     )
 

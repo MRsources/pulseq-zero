@@ -7,7 +7,7 @@ import numpy as np
 
 from typing import Optional
 from types import SimpleNamespace
-from .. import calc_duration, Opts, seq_convert, __version__
+from .. import calc_duration, Opts, seq_convert, seq_convert_cached, __version__
 from ..events import Event, SoftDelay, TrapGrad, ExtTrapGrad, ArbitraryGrad
 
 
@@ -241,6 +241,18 @@ class Sequence:
         return pp_seq
 
     def to_mr0(
-        self, samples_offres: int = 1, samples_slicesel: int = 1, samples_onres: int = 1
+        self,
+        samples_offres: int = 1,
+        samples_slicesel: int = 1,
+        samples_onres: int = 1,
+        cached: bool = True,
     ) -> MRzeroCore.Sequence:
+        """Convert to an MR-zero sequence, keeping gradients of tensor parameters.
+
+        With ``cached``, the result of the last call with the same block layout
+        is reused: only blocks that changed or hold tensors are converted
+        again. ``seq_convert_cached.clear_cache()`` frees the cached sequences.
+        """
+        if cached:
+            return seq_convert_cached.convert_cached(self, samples_offres, samples_slicesel, samples_onres)
         return seq_convert.convert(self, samples_offres, samples_slicesel, samples_onres)

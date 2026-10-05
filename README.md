@@ -172,7 +172,7 @@ See [MATH.md](MATH.md) for the full set of differentiable math helpers, includin
 
 Every `pulseqzero.Sequence` supports both paths unconditionally:
 
-- `mr0_seq = seq.to_mr0()` — build an `MRzeroCore.Sequence` for PDG simulation / optimization.
+- `mr0_seq = seq.to_mr0()` — build an `MRzeroCore.Sequence` for PDG simulation / optimization. Rebuild the sequence from the current parameters in every iteration and convert it: the conversion of the last call with the same block layout is reused, and only blocks that changed or hold tensors are converted again. `seq.to_mr0(cached=False)` converts from scratch. Keep `seq.check_timing()` out of the loop, like `write()` it translates the whole sequence through PyPulseq.
 - `seq.write("out.seq")` — translate the internal event graph through PyPulseq and emit a `.seq` file. A one-time `warnings.warn` is raised per call so you notice if it fires inside a hot loop (move it out of the optimizer).
 
 If you need a native PyPulseq `Sequence` for a one-off exotic call, `seq.to_pypulseq()` is the explicit escape hatch.
