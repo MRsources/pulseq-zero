@@ -14,11 +14,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   converted again, and every block holding a tensor is written again so that
   gradients reach it: flip angle, phase and frequency offsets only update the
   pulse rotation or ADC phase, timing and gradient tensors convert their
-  block. `to_mr0(cached=False)` converts from scratch,
-  `seq_convert.clear_cache()` frees the cached sequences. Pulse shapes and
-  their integrals are cached, and gradient moments are integrated for all
-  time points at once. On the 16-echo TSE, a full conversion went from about
-  230 ms to about 105 ms and a cached one takes about 13 ms
+  block. The cached conversion lives in `seq_convert_cached`, next to
+  `seq_convert`: `to_mr0(cached=False)` converts from scratch with
+  `seq_convert.convert`, `seq_convert_cached.clear_cache()` frees the cached
+  sequences.
+- **Faster `seq_convert`.** Pulse shapes and their integrals are cached
+  instead of rebuilding the pypulseq pulse for every sub-pulse, and gradient
+  moments are integrated for all time points of a block at once. Both
+  conversions share this code. On the 16-echo TSE, a full conversion went
+  from about 130 ms to about 50 ms, a cached one takes about 7 ms
   ([demo/benchmark_to_mr0.py](demo/benchmark_to_mr0.py)).
 - **RF shapes.** `RfPulse.waveform` stores the parameters of its waveform as a
   `BlockShape`, `GaussShape`, `SincShape` or `ArbitraryShape` instead of a

@@ -10,7 +10,8 @@ import pytest
 import torch
 
 import pulseqzero as pp
-from pulseqzero.seq_convert import clear_cache, convert
+from pulseqzero.seq_convert import convert
+from pulseqzero.seq_convert_cached import clear_cache
 
 
 def setup_function():

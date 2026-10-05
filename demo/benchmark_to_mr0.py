@@ -32,7 +32,10 @@ if "speed_up_by_assuming_const_seq_structure" in TO_MR0_PARAMETERS:
     CACHED = {"speed_up_by_assuming_const_seq_structure": True}
     FULL = {}
 elif "cached" in TO_MR0_PARAMETERS:
-    from pulseqzero.seq_convert import clear_cache
+    try:
+        from pulseqzero.seq_convert_cached import clear_cache
+    except ImportError:  # cached conversion inside seq_convert
+        from pulseqzero.seq_convert import clear_cache
     CACHED = {}
     FULL = {"cached": False}
 else:
