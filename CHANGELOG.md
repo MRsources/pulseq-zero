@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.1]
+
+### Fixed
+
+- **Fix gradient moment calculation.** This unifies the calculation of gradient moments
+  to always use `integrate()` instead of sometimes `.area`. Before, the results were
+  inconsistent and the presence of an ADC would change the used function and therefore the moment.
+
 ## [1.1.0]
 
 ### Changed

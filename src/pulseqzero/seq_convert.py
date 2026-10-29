@@ -319,9 +319,16 @@ def parse_pulse(
 
 def parse_spoiler(delay, grad_x, grad_y, grad_z) -> tuple[TmpSpoiler]:
     duration = calc_duration(delay, grad_x, grad_y, grad_z)
-    gx = grad_x.area if grad_x is not None else 0.0
-    gy = grad_y.area if grad_y is not None else 0.0
-    gz = grad_z.area if grad_z is not None else 0.0
+
+    def grad_area(grad, duration):
+        if grad is None:
+            return 0.0
+        if isinstance(grad, ArbitraryGrad):
+            return integrate(grad, duration)
+        return grad.area
+
+    gx, gy, gz = (grad_area(grad, duration) for grad in (grad_x, grad_y, grad_z))
+
     return (TmpSpoiler(duration, gx, gy, gz),)
 
 

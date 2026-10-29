@@ -405,7 +405,15 @@ def _amplitude_at(grad, rf_dur, t):
 
 
 def parse_spoiler(block: Block) -> tuple[TmpSpoiler]:
-    gx, gy, gz = (grad.area if grad is not None else 0.0 for grad in block.grads)
+    def grad_area(grad, duration):
+            if grad is None:
+                return 0.0
+            if isinstance(grad, ArbitraryGrad):
+                return integrate(grad, duration)
+            return grad.area
+    
+    gx, gy, gz = (grad_area(grad, block.duration) for grad in block.grads)
+    
     return (TmpSpoiler(block.duration, gx, gy, gz),)
 
 
