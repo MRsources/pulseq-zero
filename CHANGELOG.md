@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Upgraded locked dependencies.** Following a dependency audit, `uv.lock` was
+  refreshed to pick up fixes for known vulnerabilities. Notable upgrades include
+  `torch` 2.13.0 → 2.15.0, `mrzerocore` 1.0.5 → 1.3.0, `pillow` 12.3.0 → 13.0.0,
+  `urllib3` 2.7.0 → 2.8.0, `certifi` 2026.7.22 → 2026.10.23 and `numpy`
+  2.5.2 → 2.5.4, along with the matching CUDA / `triton` packages. The version
+  constraints in `pyproject.toml` are unchanged.
+
 ## [1.1.1]
 
 ### Fixed
