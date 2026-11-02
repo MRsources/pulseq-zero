@@ -353,7 +353,7 @@ def pulse_rotations(block: Block) -> list[tuple]:
     for i in range(block.samples):
         angle, phase = integrate_pulse(rf, t_rf[i], t_rf[i + 1])
         # phase profile due to off-resonance
-        phase = phase + 2 * torch.pi * rf.freq_offset * step * i
+        phase = phase - 2 * torch.pi * rf.freq_offset * step * (i - (block.samples - 1) / 2)
         rotations.append((angle, phase))
     return rotations
 
@@ -424,7 +424,7 @@ def adc_phase(adc: Adc) -> torch.Tensor:
         adc.delay
         + (torch.arange(adc.num_samples, dtype=torch.float32) + 0.5) * adc.dwell
     )
-    return adc.phase_offset + 2 * torch.pi * adc.freq_offset * t_samples
+    return adc.phase_offset - 2 * torch.pi * adc.freq_offset * t_samples
 
 
 def parse_adc(block: Block) -> tuple[TmpAdc, TmpSpoiler]:

@@ -246,14 +246,14 @@ def parse_pulse(
     # Alternate spoiler from one pulse center to next with pulse itself
     events: list[TmpPulse | TmpSpoiler] = []
 
-    phase_increment = torch.tensor(0.0)
+    phase_increment = torch.pi * rf.freq_offset * step * (samples - 1) * torch.tensor(1.0)
     for i in range(samples):
         events.append(TmpSpoiler(event_time[i], *gradm[i]))
         flip, phase = integrate_pulse(rf, t_rf[i], t_rf[i + 1])
 
         # phase profile due to off-resonance
         phase += phase_increment
-        phase_increment += 2 * torch.pi * rf.freq_offset * step
+        phase_increment -= 2 * torch.pi * rf.freq_offset * step
 
         rf_dur = rf.delay + rf.shape_dur  # rf duration without ringdown
 
@@ -359,7 +359,7 @@ def parse_adc(delay, adc: Adc, grad_x, grad_y, grad_z) -> tuple[TmpAdc, TmpSpoil
         adc.delay
         + (torch.arange(adc.num_samples, dtype=torch.float32) + 0.5) * adc.dwell
     )
-    adc_phase = adc.phase_offset + 2 * torch.pi * adc.freq_offset * t_samples
+    adc_phase = adc.phase_offset - 2 * torch.pi * adc.freq_offset * t_samples
     return (
         TmpAdc(event_time[:-1], gradm[:-1, :], adc_phase),
         TmpSpoiler(event_time[-1], gradm[-1, 0], gradm[-1, 1], gradm[-1, 2]),
