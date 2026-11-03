@@ -104,4 +104,5 @@ def make_adc(
         phase_offset,
         freq_ppm,
         phase_ppm,
+        system.adc_dead_time,
     )

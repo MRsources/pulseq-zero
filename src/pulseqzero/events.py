@@ -245,10 +245,11 @@ class Adc:
     phase_offset: Scalar
     freq_ppm: Scalar
     phase_ppm: Scalar
+    dead_time: Scalar
 
     @property
     def duration(self) -> Scalar:
-        return self.delay + self.num_samples * self.dwell
+        return self.delay + self.num_samples * self.dwell + self.dead_time
 
     def to_pulseq(self, system: Opts) -> SimpleNamespace:
         return pp.make_adc(
