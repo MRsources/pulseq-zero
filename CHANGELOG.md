@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.2]
+
+### Fixed
+
+- **Sign of ADC and RF frequency offsets.** `seq_convert` and `seq_convert_cached`
+  now apply the phase from `freq_offset` with a negative sign, the same convention
+  as PyPulseq / MR-zero. This affects the ADC sample phases and the per-sample phase
+  of split RF pulses. Before, sequences with frequency offsets were simulated with
+  the opposite phase ramp compared to importing the exported `.seq` file.
+- **Phase of split RF pulses is centred.** The off-resonance phase ramp of a pulse
+  split into several samples now runs symmetrically around the pulse centre instead
+  of starting at zero on the first sample. Both converters use the same convention.
+- **ADC dead time.** `make_adc` stores `system.adc_dead_time` in the new
+  `Adc.dead_time` field, and `Adc.duration` includes it, as in PyPulseq. Block
+  durations and timing checks therefore match the PyPulseq sequence.
+
 ### Security
 
 - **Upgraded locked dependencies.** Following a dependency audit, `uv.lock` was
