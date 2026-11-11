@@ -24,8 +24,8 @@ pip install pulseqzero
 ```
 
 > [!NOTE]
-> Pulseq-zero does not declare any runtime dependencies, but it expects `pypulseq`, `torch`, `MRzeroCore`, `numpy`, and `matplotlib` to already be in the environment.
-> Pulseq-zero 1.0 is compatible with **PyPulseq 1.4.x and 1.5.x**. Version-specific kwargs (`freq_ppm`, `no_signal_scaling`, `use_block_cache`, etc.) are detected at import time via `inspect.signature`, so the same pulseq-zero installation adapts automatically to whichever PyPulseq version is in the environment.
+> Pulseq-zero supports **Python 3.10 – 3.15** and installs its runtime dependencies with loose lower bounds: `pypulseq>=1.5`, `MRzeroCore>=1.0` (`>=1.4` on Python 3.10 and 3.15), `torch>=2.3`, `numpy>=1.22` (numpy 1.x and 2.x both work). These floors are tested, so it should slot into existing environments without forcing upgrades.
+> PyPulseq 1.4.x is not supported. Version-specific kwargs (`freq_ppm`, `no_signal_scaling`, `use_block_cache`, etc.) are detected at import time via `inspect.signature`, so pulseq-zero adapts to newer PyPulseq releases.
 >
 > **Migration from 0.x:** the mode-switching facade has been removed. Replace `import pulseqzero; pp = pulseqzero.pp_impl` with `import pulseqzero as pp`, and drop any `with pulseqzero.mr0_mode():` wrappers — `seq.to_mr0()` and `seq.write()` both work unconditionally now.
 
@@ -138,7 +138,7 @@ Good to know:
 - **The demos are the remaining acceptance gate.** `demo/main.py` must complete 30 Adam iterations with non-NaN data loss and monotonically-decreasing SAR.
 - **PyTorch CUDA pin.** [demo/pyproject.toml](demo/pyproject.toml) references the CUDA 12.6 wheel index (`download.pytorch.org/whl/cu126`). Swap that index URL (or remove it) if you're on CPU-only or a different CUDA version.
 - **Headless plotting.** `seq.plot()` forwards to pypulseq's plot and expects an interactive matplotlib backend. Export `MPLBACKEND=Agg` to run headless (Agg will render but not show — useful for CI-style runs).
-- **Falling back to plain pip.** If you'd rather skip uv, `pip install --editable .` from the root still works — but the root declares no runtime deps, so you need `pypulseq==1.5.0.post1`, `torch`, `MRzeroCore`, `numpy`, and `matplotlib` already in the env (a venv created with `--system-site-packages` and an existing MR-zero install is the path of least resistance).
+- **Falling back to plain pip.** If you'd rather skip uv, `pip install --editable .` from the root still works and pulls in the runtime deps. Install `torch` from the [PyTorch index](https://pytorch.org/get-started/locally/) first if you need a specific CUDA/CPU build, and add `pytest` and `matplotlib` for the tests.
 - **Warnings are single-fire.** `seq.to_pypulseq()` (and `seq.write()` / `seq.plot()` / other forwarders) emit a `UserWarning` the *first* time they run from a given call site, then stay quiet — Python's default warning filter dedupes by `(message, module, lineno)`. If the warning fires inside an optimization loop, move the call out of the loop.
 
 

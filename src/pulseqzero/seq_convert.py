@@ -9,6 +9,9 @@ from . import calc_duration
 from .events import Adc, Delay, SoftDelay, RfPulse, TrapGrad, ExtTrapGrad, ArbitraryGrad
 from .rf_shapes import RfShape
 
+# np.trapz was renamed to np.trapezoid in numpy 2.0 (np.trapz is removed in 2.4)
+_trapezoid = getattr(np, "trapezoid", None) or np.trapz
+
 
 def convert_tensors_to_float32(obj):
     if hasattr(obj, "__dataclass_fields__"):
@@ -514,6 +517,6 @@ def pulse_fraction(
     time = [lo] + time_shape[i_start:i_end].tolist() + [hi]
     amp = [v_start] + amp_shape[i_start:i_end].tolist() + [v_end]
 
-    window_area = np.trapezoid(amp, time)
-    full_area = np.trapezoid(amp_shape, time_shape)
+    window_area = _trapezoid(amp, time)
+    full_area = _trapezoid(amp_shape, time_shape)
     return float(window_area / full_area) if full_area != 0 else 0.0

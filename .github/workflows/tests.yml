@@ -8,26 +8,49 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # lowest allowed dependency versions keep the lower bounds in
+          # pyproject.toml honest. 3.10 resolves mrzerocore>=1.4 (marker),
+          # 3.11 exercises mrzerocore 1.0.0; numpy 1.22 has no 3.11 wheels.
+          - python-version: "3.10"
+            resolution: lowest-direct
+            numpy: ">=1.22"
+            matplotlib: ">=3.6,<3.7"
+          - python-version: "3.11"
+            resolution: lowest-direct
+            numpy: ">=1.23.2"
+            matplotlib: ">=3.9"
+          # newest Python with the latest dependency versions
+          - python-version: "3.15"
+            resolution: highest
+            numpy: ">=1.22"
+            matplotlib: ">=3.9"
+
+    name: py${{ matrix.python-version }} (${{ matrix.resolution }})
 
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v6
         with:
-          python-version: "3.11"
+          python-version: ${{ matrix.python-version }}
+          activate-environment: true
 
       - name: Install dependencies
+        # CPU torch wheels; matplotlib is test-only (write_ute.py imports pyplot)
         run: |
-          pip install torch --index-url https://download.pytorch.org/whl/cpu
-          pip install pypulseq MRzeroCore pytest matplotlib
-          pip install --editable .
+          uv pip install --resolution ${{ matrix.resolution }} \
+            --index https://download.pytorch.org/whl/cpu --index-strategy unsafe-best-match \
+            --editable . "pytest>=8" "numpy${{ matrix.numpy }}" "matplotlib${{ matrix.matplotlib }}"
+          uv pip list | grep -iE "^(numpy|torch|mrzerocore|pypulseq) "
 
       - name: Run adapter completeness check
         run: python demo/test_pypulseq_sequence_all_funcs.py
-        working-directory: ${{ github.workspace }}
 
       - name: Run test suite
         run: pytest tests -q
         env:
           MPLBACKEND: Agg
-        working-directory: ${{ github.workspace }}
