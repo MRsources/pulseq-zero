@@ -4,21 +4,39 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pulseqzero"
-version = "1.1.2"
+version = "1.2.0"
 description = "Use PyPulseq for MRI sequence definitions in MR-zero"
 readme = "README.md"
+requires-python = ">=3.10"
 authors = [
   { name = "Jonathan Endres", email = "jonathan.endres@uk-erlangen.de" },
 ]
 classifiers = [
   "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Programming Language :: Python :: 3.15",
   "Operating System :: OS Independent",
   "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
 ]
+# Lower bounds are tested (uv --resolution lowest-direct), not guessed:
+# - mrzerocore 1.0.0: Pulse.grad / freq_offset / duration; 0.4.x pins pypulseq<1.5
+# - mrzerocore 1.4.0 on 3.10 (1.0.2-1.3.0 use typing.Self) and on 3.15+
+#   (older releases depend on ismrmrd -> h5py, which has no 3.15 wheels)
+# - numpy 1.22: matches mrzerocore 1.4; np.trapezoid has a np.trapz fallback
+# - torch 2.3: autograd.Function needs >=2.0, and torch <2.3 breaks with numpy 2
+#   ("Numpy is not available") without declaring numpy<2 itself
+# - pypulseq 1.5: rf use="undefined" and other 1.5-only API used internally
 dependencies = [
-    "mrzerocore>=0.4.7",
-    "numpy>=2.4.4",
-    "pypulseq>=1.4",
+    "mrzerocore>=1.0.0",
+    "mrzerocore>=1.4.0; python_version < '3.11' or python_version >= '3.15'",
+    "numpy>=1.22",
+    "pypulseq>=1.5",
+    "torch>=2.3",
 ]
 
 [dependency-groups]
@@ -26,7 +44,6 @@ dev = [
     "pytest>=8",
     # write_ute.py imports pyplot at module level
     "matplotlib",
-    "pypulseq>=1.5",
 ]
 
 [tool.pytest.ini_options]
