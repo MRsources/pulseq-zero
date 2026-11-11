@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0]
+
+### Added
+
+- **Python 3.10 and 3.15 support.** pulseq-zero now declares
+  `requires-python = ">=3.10"` and is tested on Python 3.10 through 3.15.
+- **numpy 1.x support.** `numpy>=1.22` is accepted. On numpy 1.x pulseq-zero
+  falls back to `np.trapz` where it uses `np.trapezoid`.
+
+### Changed
+
+- **Relaxed and corrected dependency bounds.** Every lower bound is now tested by
+  running the suite with `uv --resolution lowest-direct`.
+  - `numpy>=2.4.4` → `numpy>=1.22`.
+  - `torch>=2.3` is now declared, since pulseq-zero imports torch directly.
+    Older torch releases fail when installed alongside numpy 2.
+  - `mrzerocore>=0.4.7` → `mrzerocore>=1.0.0`. Older releases lack the
+    `Pulse.grad` / `freq_offset` / `duration` attributes used in conversion.
+    Python 3.10 and 3.15 require `mrzerocore>=1.4.0`.
+  - `pypulseq>=1.4` → `pypulseq>=1.5`. Conversion to MR-zero never worked with
+    PyPulseq 1.4.x, so the README no longer claims support for it.
+- `uv.lock` now uses `mrzerocore` 1.4.0, which no longer pulls in `ismrmrd`,
+  `h5py`, `scikit-image` or `torchkbnufft` by default.
+- CI tests the lowest allowed dependency versions on Python 3.10 and 3.11, and
+  the latest ones on Python 3.15.
+
 ## [1.1.2]
 
 ### Fixed
